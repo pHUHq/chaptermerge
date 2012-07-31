@@ -1,0 +1,97 @@
+#!/usr/bin/php
+<?php
+
+//Copyright (c) 2012-Present, Rob Peck.
+//All rights reserved.
+//
+//Redistribution and use in source and binary forms, with or without
+//modification, are permitted provided that the following conditions are met:
+//    * Redistributions of source code must retain the above copyright
+//      notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above copyright
+//      notice, this list of conditions and the following disclaimer in the
+//      documentation and/or other materials provided with the distribution.
+//    * Neither the name of the <organization> nor the
+//      names of its contributors may be used to endorse or promote products
+//      derived from this software without specific prior written permission.
+//
+//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+//DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+//DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+//(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+//LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+//ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+//SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+$opts = getopt("f:o:h");
+
+if(isset($opts["h"]) || empty($opts)) {
+    echo "chaptermerge, a script for merging m4v chapters.\n";
+    echo "Copyright (c) 2012-Present, Rob Peck. http://www.robpeck.com\n\n";
+    echo "Usage:\n";
+    echo "  chaptermerge -f file1.txt,2:34:50 -f file2.txt -o file.txt\n\n";
+    echo "Options:\n";
+    echo " -f  <file>,<time>    Files that you're merging.\n";
+    echo " -o  <file>           Output file.\n";
+    echo " -h                   This help.\n\n";
+    exit(0);
+}
+
+$files = $opts["f"];
+$chapters = array();
+$offset = 0;
+
+if(!empty($files)) {
+    foreach ($files as $f) {
+        $file = "";
+        $ztime = 0;
+        list($file, $ztime) = explode(",", $f);
+
+        $d = file($file);
+        for ($i=0; $i < count($d); $i+=2) { 
+            list($_disc, $time) = explode("=", $d[$i], 2);
+            list($_disc, $name) = explode("=", $d[$i+1], 2);
+
+            $time = preg_replace('/^([\d]{1,2})\:([\d]{2})$/', "00:$1:$2", $time);
+            sscanf($time, "%d:%d:%d", $hours, $minutes, $seconds);
+            $time = $offset + $hours * 3600 + $minutes * 60 + $seconds;
+
+            $seconds = $time % 60;
+            $time = ($time - $seconds) / 60;
+            $minutes = $time % 60;
+
+            $seconds = str_pad($seconds, 2, "0", STR_PAD_LEFT);
+            $minutes = str_pad($minutes, 2, "0", STR_PAD_LEFT);
+            $hours = str_pad(($time - $minutes) / 60, 2, "0", STR_PAD_LEFT);
+
+            $time = "$hours:$minutes:$seconds.000";
+
+            $chapters[] = array(
+                "time" => trim($time),
+                "name" => trim($name)
+            );
+
+        }
+
+        if($ztime) {
+            $ztime = preg_replace('/^([\d]{1,2})\:([\d]{2})$/', "00:$1:$2", $ztime);
+            sscanf($ztime, "%d:%d:%d", $hours, $minutes, $seconds);
+            $offset += $hours * 3600 + $minutes * 60 + $seconds;
+        }
+    }
+}
+
+if(!empty($chapters)) {
+    $fp = fopen($opts["o"], "w");
+    foreach ($chapters as $chapter => $value) {
+        $chapter = str_pad($chapter, 2, "0", STR_PAD_LEFT);
+        fwrite($fp, "CHAPTER$chapter=" . $value["time"] . "\n");
+        fwrite($fp, "CHAPTER$chapter" . "NAME=" . $value["name"] . "\n");
+    }
+    fclose($fp);
+}
+
+?>
